@@ -6,14 +6,14 @@ A set of C++ parallel-computing labs built with OpenMP and MPI. Each lab is a se
 
 | Lab | Topic | Demonstrates |
 | --- | --- | --- |
-| [`1-lab`](1-lab) | Hello world | Basic `#pragma omp parallel` region with a `critical` section, thread count taken from `std::thread::hardware_concurrency()`. |
-| [`2-lab`](2-lab) | Uneven workload split | Manual chunking of an array across 8 threads using `master` and `barrier`; per-thread fill and stencil-calculation timing. |
-| [`3-lab`](3-lab) | Matrix multiplication | `parallel for collapse(3)` with `atomic` accumulation over a 500x500 matrix; sequential vs. 1/2/4/8-thread comparison. |
-| [`4-lab`](4-lab) | Recursive fractals | Koch snowflake and Towers of Hanoi parallelized with `#pragma omp task ... if(...)`; Koch output rendered to an SVG file. |
-| [`5-lab`](5-lab) | SIMD reduction | Series summation vectorized with `#pragma omp simd reduction(...)`, sequential vs. parallel timing. |
-| [`6-lab`](6-lab) | SIMD benchmarking | Same SIMD reduction kernel as lab 5 run in a repeated benchmark loop; ships with a Linux compile script and Intel `icc` optimization-flag examples. |
-| [`7-lab-mpi`](7-lab-mpi) | MPI message passing | Two ranks generate array halves and exchange them with `MPI_Send`/`MPI_Recv`, then each sums its portion and reports `MPI_Wtime`. |
-| [`control-task`](control-task) | Layered network pass | Multi-layer feed-forward pass using `parallel for reduction` and a `tanh`-style activation, with `if`-toggled parallelism. |
+| [`1-lab`](1-lab/Parallel_OpenMP.cpp) | Hello world | Basic `#pragma omp parallel` region with a `critical` section, thread count taken from `std::thread::hardware_concurrency()`. |
+| [`2-lab`](2-lab/Parallel_OpenMP.cpp) | Uneven workload split | Manual chunking of an array across 8 threads using `master` and `barrier`; per-thread fill and stencil-calculation timing. |
+| [`3-lab`](3-lab/Parallel_OpenMP.cpp) | Matrix multiplication | `parallel for collapse(3)` with `atomic` accumulation over a 500x500 matrix; sequential vs. 1/2/4/8-thread comparison. |
+| [`4-lab`](4-lab/Parallel_OpenMP.cpp) | Recursive fractals | Koch snowflake and Towers of Hanoi parallelized with `#pragma omp task ... if(...)`; Koch output rendered to an SVG file. |
+| [`5-lab`](5-lab/Parallel_OpenMP.cpp) | SIMD reduction | Series summation vectorized with `#pragma omp simd reduction(...)`, sequential vs. parallel timing. |
+| [`6-lab`](6-lab/Parallel_OpenMP.cpp) | SIMD benchmarking | Same SIMD reduction kernel as lab 5 run in a repeated benchmark loop; ships with a Linux compile script and Intel `icc` optimization-flag examples. |
+| [`7-lab-mpi`](7-lab-mpi/Parallel_OpenMP.cpp) | MPI message passing | Two ranks generate array halves and exchange them with `MPI_Send`/`MPI_Recv`, then each sums its portion and reports `MPI_Wtime`. |
+| [`control-task`](control-task/Parallel_OpenMP.cpp) | Layered network pass | Multi-layer feed-forward pass using `parallel for reduction` and a `tanh`-style activation, with `if`-toggled parallelism. |
 
 ## Tech stack
 
