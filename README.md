@@ -1,5 +1,13 @@
 # ParallelOpenMP
 
+<p align="center">
+  <a href="https://andrew1407.github.io/ParallelOpenMP/" title="Open the labs in the browser">
+    <img src="web/icon.svg" alt="Parallel OpenMP Labs" width="96" height="96">
+  </a>
+</p>
+
+[![pages deploy badge](https://github.com/andrew1407/ParallelOpenMP/actions/workflows/pages.yml/badge.svg)](https://andrew1407.github.io/ParallelOpenMP/)
+
 A set of C++ parallel-computing labs built with OpenMP and MPI. Each lab is a self-contained program that compares a sequential implementation against a parallel one and reports execution times, covering multithreading, SIMD vectorization, recursive task parallelism, and message passing between processes.
 
 ## Labs
@@ -14,6 +22,23 @@ A set of C++ parallel-computing labs built with OpenMP and MPI. Each lab is a se
 | [`6-lab`](6-lab/Parallel_OpenMP.cpp) | SIMD benchmarking | Same SIMD reduction kernel as lab 5 run in a repeated benchmark loop; ships with a Linux compile script and Intel `icc` optimization-flag examples. |
 | [`7-lab-mpi`](7-lab-mpi/Parallel_OpenMP.cpp) | MPI message passing | Two ranks generate array halves and exchange them with `MPI_Send`/`MPI_Recv`, then each sums its portion and reports `MPI_Wtime`. |
 | [`control-task`](control-task/Parallel_OpenMP.cpp) | Layered network pass | Multi-layer feed-forward pass using `parallel for reduction` and a `tanh`-style activation, with `if`-toggled parallelism. |
+
+## Showcase
+
+**[Open the labs in the browser](https://andrew1407.github.io/ParallelOpenMP/)**. The labs' own C++ is compiled to WebAssembly with emscripten, with adjustable parameters, timing and speedup charts, the Koch curve SVG, and buttons to copy each chart (PNG or CSV), drawing (SVG or PNG), table, program output and set of results.
+
+- **Threads are Web Workers.** GitHub Pages can't send the COOP/COEP headers that wasm pthreads need, and emscripten has no OpenMP runtime. So the labs compile without `-fopenmp` against a small [`omp.h`](web/wasm/include/omp.h). The page then forks each parallel region over N workers running the same module, gives each one the share OpenMP's static schedule would give that thread, and joins on their replies. Timings are wall clock, sequential against 1, 2, 4 and 8 workers.
+- **Native lab code:** labs 1, 2 and 7 and the control task run their unchanged `main()`. Lab 3 uses `multiply()` and `cleanMatrix()`, lab 4 the `KochSnowflake` and `HanoiTower` classes (including `drawSVG`), and labs 5–6 `calcSumsSeq`/`calcSumsPar`, built with `-fopenmp-simd` and with and without `-msimd128`. In lab 7, `MPI_Send`/`MPI_Recv` go through `postMessage` ([`mpi.h`](web/wasm/include/mpi.h), with Asyncify for the blocking receive).
+- **Ported:** only the per-thread shares: lab 3's block of the `collapse(3)` loop, the control task's per-layer chunk, and the split of lab 4's task trees. [`web/wasm/gen.py`](web/wasm/gen.py) makes lab 2's array size and lab 3's `SIZE` adjustable at build time, without touching the sources.
+
+Run it locally (needs [emsdk](https://emscripten.org/docs/getting_started/downloads.html)):
+
+```sh
+./web/wasm/build.sh              # builds web/build/*.mjs + .wasm
+python -m http.server            # then open http://localhost:8000/web/
+```
+
+The [pages workflow](.github/workflows/pages.yml) builds and deploys it on every push to `main`.
 
 ## Tech stack
 
@@ -69,7 +94,10 @@ mpirun -np 2 ./out
 ├── 5-lab/            # SIMD reduction
 ├── 6-lab/            # SIMD reduction benchmark + compile.sh / commands.txt
 ├── 7-lab-mpi/        # MPI send/recv between two ranks
-└── control-task/     # Layered feed-forward pass
+├── control-task/     # Layered feed-forward pass
+└── web/              # Browser showcase (GitHub Pages)
+    ├── index.html, app.js, worker.js, theme.js, icon.svg
+    └── wasm/         # emscripten build: build.sh, gen.py, lab wrappers, omp.h/mpi.h stubs
 ```
 
 Each lab folder contains a [`Parallel_OpenMP.cpp`](1-lab/Parallel_OpenMP.cpp) source file alongside its Visual Studio solution and project files. Lab 4 additionally splits its workloads into [`koch.cpp`](4-lab/koch.cpp) and [`hanoi.cpp`](4-lab/hanoi.cpp).

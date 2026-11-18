@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Parallel OpenMP Labs</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <script src="theme.js"></script>
+  <meta name="description" content="Run the ParallelOpenMP labs in your browser: the labs' C++ compiled to WebAssembly, with OpenMP threads as Web Workers and MPI ranks exchanging messages through postMessage.">
+  <style>
+    :root {
+      --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5d6673; --line: #dfe3e8; --grid: #eceff3;
+      --accent: #3557d6; --accent-ink: #ffffff; --soft: #eef1fb; --err: #c0362c; --err-soft: #fdecea; --ok: #1f8a4c; --ok-soft: #e3f4ea;
+      --c1: #3557d6; --c2: #d4731f; --c3: #1f8a4c; --c4: #8152c2; --c5: #c0362c; --c6: #1d8ea3; --c7: #b8971b;
+      --cpp: #2f6fb3; --cpp-soft: #dde9f7; --c8: #6b7a8f;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      color-scheme: light;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #111418; --panel: #191d23; --ink: #e6e9ee; --muted: #9aa4b2; --line: #2b313a; --grid: #222830;
+        --accent: #7c97ff; --accent-ink: #0d1117; --soft: #1f2636; --err: #ff7b72; --err-soft: #3a1d1c; --ok: #4fd18b; --ok-soft: #16301f;
+        --c1: #7c97ff; --c2: #f0a050; --c3: #4fd18b; --c4: #b48cf0; --c5: #ff7b72; --c6: #4cc4d8; --c7: #e0c050;
+        --cpp: #6ea8e8; --cpp-soft: #172a40; --c8: #a3b1c4;
+        color-scheme: dark;
+      }
+    }
+    :root[data-theme="dark"] {
+      --bg: #111418; --panel: #191d23; --ink: #e6e9ee; --muted: #9aa4b2; --line: #2b313a; --grid: #222830;
+      --accent: #7c97ff; --accent-ink: #0d1117; --soft: #1f2636; --err: #ff7b72; --err-soft: #3a1d1c; --ok: #4fd18b; --ok-soft: #16301f;
+      --c1: #7c97ff; --c2: #f0a050; --c3: #4fd18b; --c4: #b48cf0; --c5: #ff7b72; --c6: #4cc4d8; --c7: #e0c050;
+      --cpp: #6ea8e8; --cpp-soft: #172a40; --c8: #a3b1c4;
+      color-scheme: dark;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    .wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 64px; }
+    header { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; }
+    header img { flex: none; width: 52px; height: 52px; }
+    h1 { font-size: 24px; margin: 0; letter-spacing: -.01em; }
+    header p { margin: 2px 0 0; color: var(--muted); }
+    a { color: var(--accent); }
+    code { font-family: var(--mono); font-size: .92em; }
+    button { font: inherit; cursor: pointer; }
+    [hidden] { display: none !important; }
+
+    nav.labs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    nav.labs button { display: flex; align-items: center; gap: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 10px; padding: 6px 12px; font-size: 14px; }
+    nav.labs button:hover { border-color: var(--accent); }
+    nav.labs button[aria-selected="true"] { background: var(--soft); border-color: var(--accent); font-weight: 600; }
+    .lang { font: 600 10px/1 system-ui, sans-serif; letter-spacing: .04em; padding: 3px 5px; border-radius: 5px; border: 1px solid; text-transform: uppercase; }
+    .lang.cpp { color: var(--cpp); background: var(--cpp-soft); border-color: var(--cpp); }
+
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+    h2 small { text-transform: none; letter-spacing: 0; font-weight: 400; }
+    .lab-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+    .lab-head h3 { margin: 0; font-size: 19px; }
+    .lab-head a { font-size: 13px; margin-left: auto; }
+    .intro { margin: 0 0 14px; color: var(--muted); max-width: 900px; }
+
+    form.params { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+    .field input, .field select { font: 15px var(--mono); width: 120px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--ink); }
+    .field.wide input { width: 220px; }
+    .field input:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+    .field.radio { flex-direction: row; gap: 4px; }
+    .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    .seg label { padding: 7px 11px; font-size: 14px; color: var(--muted); cursor: pointer; }
+    .seg input { position: absolute; opacity: 0; pointer-events: none; }
+    .seg label:has(input:checked) { background: var(--soft); color: var(--ink); }
+    .seg label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .run { padding: 8px 20px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+    .run:disabled { opacity: .5; cursor: wait; }
+    .examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; align-items: center; }
+    .examples span { color: var(--muted); font-size: 13px; margin-right: 4px; }
+    .chip { font: 13px var(--mono); padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: transparent; color: var(--ink); }
+    .chip:hover { border-color: var(--accent); color: var(--accent); }
+    .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+
+    .loading { position: relative; overflow: hidden; display: flex; gap: 12px; align-items: center; margin-top: 14px; padding: 12px 14px; border: 1px solid var(--accent); border-radius: 10px; background: var(--soft); }
+    .loading b { display: block; font-size: 15px; }
+    .loading small { display: block; color: var(--muted); font-size: 13px; }
+    .loading .elapsed { font-variant-numeric: tabular-nums; }
+    .spinner { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 3px solid color-mix(in srgb, var(--accent) 25%, transparent); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+    .loading .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; overflow: hidden; }
+    .loading .bar i { position: absolute; top: 0; bottom: 0; width: 35%; background: var(--accent); animation: slide 1.4s ease-in-out infinite; }
+    .loading.slow { border-color: var(--err); }
+    .loading.slow .bar i { background: var(--err); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes slide { from { left: -35%; } to { left: 100%; } }
+    @media (prefers-reduced-motion: reduce) { .spinner, .loading .bar i { animation-duration: 3s; } }
+
+    .err { background: var(--err-soft); border: 1px solid var(--err); border-radius: 10px; padding: 10px 14px; margin-top: 14px; color: var(--err); font-family: var(--mono); font-size: 14px; overflow-wrap: anywhere; }
+    .note { border-left: 3px solid var(--c2); background: color-mix(in srgb, var(--c2) 9%, transparent); padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 14px; margin: 0 0 14px; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); gap: 10px; margin-bottom: 16px; }
+    .stat { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+    .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .stat span { font-size: 12px; color: var(--muted); }
+    .stat.bad b { color: var(--err); }
+    .stat.good b { color: var(--ok); }
+    .charts { display: grid; grid-template-columns: 1fr; gap: 16px; }
+    @media (min-width: 900px) { .charts.two { grid-template-columns: 1fr 1fr; } }
+
+    figure.chart { margin: 0; position: relative; min-width: 0; }
+    figure.chart figcaption { font-size: 14px; font-weight: 600; margin-bottom: 4px; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+    figure.chart figcaption .keys { display: flex; flex-wrap: wrap; gap: 4px 12px; font-weight: 400; font-size: 12px; color: var(--muted); }
+    figure.chart figcaption .keys i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: 3px; margin-right: 5px; }
+    .plot { position: relative; touch-action: pan-y; }
+    .plot svg { display: block; width: 100%; overflow: visible; }
+    .plot text { font: 11px system-ui, sans-serif; fill: var(--muted); }
+    .tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 9px; font: 12px/1.45 var(--mono); box-shadow: 0 4px 14px rgb(0 0 0 / .12); white-space: nowrap; z-index: 2; }
+    .tip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+    .tip .tx { color: var(--muted); }
+
+    .result { display: grid; gap: 12px; }
+    .big { font: 600 22px var(--mono); overflow-wrap: anywhere; }
+    .big .muted, .muted { color: var(--muted); font-weight: 400; }
+    .ok { color: var(--ok); }
+    .bad { color: var(--err); }
+    .table-wrap { overflow: auto; max-height: 420px; border: 1px solid var(--line); border-radius: 10px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13px; }
+    th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th { color: var(--muted); font-weight: 600; position: sticky; top: 0; background: var(--panel); }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+    .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 10px; }
+    .tab { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 8px; padding: 4px 12px; font-size: 14px; }
+    .tab[aria-selected="true"] { background: var(--soft); color: var(--ink); border-color: var(--accent); }
+    .gantt { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+    .gantt svg { display: block; }
+    .gantt text { font: 11px system-ui, sans-serif; fill: var(--muted); }
+    .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .eq { font: 18px var(--mono); overflow-wrap: anywhere; }
+    .eq b { color: var(--accent); }
+    .two-col { display: grid; gap: 16px; grid-template-columns: 1fr; }
+    @media (min-width: 900px) { .two-col { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+    .algo-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); margin-bottom: 16px; }
+    .copy-actions { display: inline-flex; gap: 4px; margin-left: auto; }
+    .mini { border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 6px; font-size: 12px; padding: 2px 8px; white-space: nowrap; }
+    .mini:hover { border-color: var(--accent); color: var(--accent); }
+    .copy-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .copy-head h2 { margin: 0 0 6px; }
+    .out-actions { display: flex; justify-content: flex-end; margin: -6px 0 8px; }
+    figure.chart figcaption { width: 100%; }
+    footer { color: var(--muted); font-size: 13px; margin-top: 24px; }
+
+    @media (max-width: 720px) {
+      .wrap { padding-top: 18px; }
+      header img { width: 42px; height: 42px; }
+      h1 { font-size: 21px; }
+      .panel { padding: 14px; border-radius: 10px; }
+      nav.labs button { padding: 7px 10px; font-size: 13px; }
+      .field input, .field select { width: 104px; }
+      .field.wide input { width: 100%; }
+      .field.wide { flex: 1 1 100%; }
+      .stat b { font-size: 18px; }
+      .mini { padding: 5px 10px; }
+      .lab-head a { margin-left: 0; flex-basis: 100%; }
+      .long { display: none; }
+    }
+
+    .charts > *, .two-col > * { min-width: 0; }
+    .field.xwide input { width: 420px; max-width: 100%; }
+    h2.sub { font-size: 15px; color: var(--ink); text-transform: none; letter-spacing: 0; margin: 26px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+    .out > h2.sub:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
+    h3.sub3 { font-size: 14px; margin: 20px 0 10px; color: var(--muted); font-weight: 600; }
+    pre.console { margin: 0; max-height: 320px; overflow: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: 12.5px/1.5 var(--mono); white-space: pre; tab-size: 4; }
+    .drawing .plot.koch { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #000; }
+    .drawing .plot.koch svg { width: 100%; height: auto; }
+    .panel.inset { margin: 0 0 16px; padding: 14px; background: var(--panel); }
+    details.how { margin-bottom: 16px; }
+    details.how summary { cursor: pointer; font-weight: 600; }
+    details.how[open] summary { margin-bottom: 8px; }
+    details.how p, details.how li { color: var(--muted); max-width: 920px; }
+    details.how ul { margin: 6px 0 0; padding-left: 20px; }
+    @media (max-width: 720px) { .field.xwide { flex: 1 1 100%; } .field.xwide input { width: 100%; } }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="icon.svg" alt="" width="52" height="52">
+    <div>
+      <h1>Parallel OpenMP Labs</h1>
+      <p>The <a href="https://github.com/Andrew1407/ParallelOpenMP">ParallelOpenMP</a> labs, running in your browser. Their C++ is compiled to WebAssembly, and each OpenMP thread or MPI rank is a Web Worker.</p>
+    </div>
+    <button class="theme-toggle" data-theme-toggle></button>
+  </header>
+
+  <details class="panel how">
+    <summary>How the threads run here</summary>
+    <p>Native OpenMP needs threads that share memory. In WebAssembly that means emscripten pthreads, which need <code>SharedArrayBuffer</code>, which browsers only allow on cross-origin-isolated pages (the COOP/COEP headers). GitHub Pages can't send those headers. <code>coi-serviceworker</code> can add them, but it has to reload the page on the first visit and doesn't work in every browser. Even with pthreads, emscripten has no OpenMP runtime (<code>libomp</code>) for the pragmas. So this page does what the OpenMP runtime would do, by hand:</p>
+    <ul>
+      <li>The lab sources compile without <code>-fopenmp</code>, so the pragmas are ignored, against a small <code>omp.h</code> that provides <code>omp_get_wtime()</code>, <code>omp_get_thread_num()</code> and the rest.</li>
+      <li>A parallel region is a <b>fork</b> over N Web Workers, each running the same WebAssembly module. Each worker gets the thread number and the share of the loop or task tree that OpenMP would give that thread (the default static schedule, the same chunking as the lab). The <b>join</b> is waiting for every reply, and reductions and <code>atomic</code> updates are added up from the replies.</li>
+      <li>Workers don't share memory, so the inputs a thread needs are rebuilt in each worker (the same seed) or sent along, and the results come back as copies. That cost is included in the wall-clock times, measured on the page from fork to join.</li>
+      <li><code>#pragma omp simd</code> (labs 5–6) doesn't use threads. <code>-fopenmp-simd</code> makes clang honour it without a runtime, and <code>-msimd128</code> lets it use WebAssembly SIMD.</li>
+      <li>MPI (lab 7): each rank is a worker running the lab's <code>main()</code>. <code>MPI_Send</code> posts the buffer through the page to the other rank, and a blocking <code>MPI_Recv</code> waits for it with Asyncify.</li>
+    </ul>
+  </details>
+
+  <nav class="labs" id="nav" role="tablist" aria-label="Labs"></nav>
+  <main id="labs"></main>
+
+  <footer>Timings are measured in your browser, and vary between runs and machines. Browsers round timers to about 0.1 ms on pages without cross-origin isolation.</footer>
+</div>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>
