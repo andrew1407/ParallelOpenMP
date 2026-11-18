@@ -49,7 +49,7 @@ int main() {
 
 	double totalFilled = 0.0;
 	double totalCalculated = 0.0;
-	const int secCoef = 10e9;
+	const double secCoef = 1e9;
 	for (int i = 0; i < threads; i++) {
 		totalFilled += fillTime[i];
 		totalCalculated += calcTime[i];

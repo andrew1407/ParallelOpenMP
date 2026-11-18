@@ -52,7 +52,7 @@ const TASKS = {
     out = [];
     const t0 = now();
     M._run_main();
-    return { lines: out, coef: M._lab2_sec_coef(), t0, t1: now() };
+    return { lines: out, t0, t1: now() };
   },
 
   lab3setup(M, { size, seed }) { M._lab3_setup(size, seed); return {}; },
@@ -85,15 +85,12 @@ const TASKS = {
     const sums = () => Array.from(M.HEAPF32.subarray(M._simd_sums() >> 2, (M._simd_sums() >> 2) + 6));
     const seq = best(() => M._simd_seq()); const seqSums = sums();
     const par = best(() => M._simd_par()); const parSums = sums();
-    const rew = best(() => M._simd_rewrite()); const rewSums = sums();
-    return { simd: !!M._simd_enabled(), seq, par, rew, seqSums, parSums, rewSums };
+    return { simd: !!M._simd_enabled(), seq, par, seqSums, parSums };
   },
   simdBench(M, { reps }) {
     return {
       simd: !!M._simd_enabled(),
       seq: M._simd_bench(reps, 0) * 1e3, par: M._simd_bench(reps, 1) * 1e3,
-      seqKept: M._simd_bench_kept(reps, 0) * 1e3, parKept: M._simd_bench_kept(reps, 1) * 1e3,
-      rewrite: M._simd_rewrite_bench(reps) * 1e3,
     };
   },
 

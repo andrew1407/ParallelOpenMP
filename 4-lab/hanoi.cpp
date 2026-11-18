@@ -14,7 +14,11 @@ class HanoiTower {
 
     double runCycle(const int height, const char inputRod, const char outputRod, const char middleRod) {
       const double start = omp_get_wtime();
-      if (height) calculate(height, inputRod, outputRod, middleRod);
+      if (height) {
+        #pragma omp parallel if (isParallel)
+        #pragma omp single
+        calculate(height, inputRod, outputRod, middleRod);
+      }
       return omp_get_wtime() - start;
     }
 
@@ -28,10 +32,11 @@ class HanoiTower {
         return;
       }
 
-      #pragma omp task if (isParallel && height > 2)
+      // with logging on, the moves must print in order, so the tasks run in place
+      #pragma omp task if (isParallel && !showLogs && height > 2)
       calculate(height - 1, inputRod, middleRod, outputRod);
       logMove(height, inputRod, outputRod);
-      #pragma omp task if (isParallel && height > 2)
+      #pragma omp task if (isParallel && !showLogs && height > 2)
       calculate(height - 1, middleRod, outputRod, inputRod);
     }
 

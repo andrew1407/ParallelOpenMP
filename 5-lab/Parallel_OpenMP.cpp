@@ -14,7 +14,7 @@ typedef struct {
 	float sum4_2 = 0;
 
 	void clear() {
-		sum1 = sum2 = sum3_1 = sum3_1 = sum3_2 = sum4_1 = sum4_2 = 0;
+		sum1 = sum2 = sum3_1 = sum3_2 = sum4_1 = sum4_2 = 0;
 	}
 
 	void log() {
@@ -59,12 +59,12 @@ double calcSumsPar(sums* s) {
 		const float el = 1.0 / (i + 1);
 		const float elSub = 1.0 / (RANGE - i);
 		const bool isEven = (i + 1) % 2 == 0;
-		float* halfSum3 = isEven ? &sum3_1 : &sum3_2;
-		float* halfSum4 = isEven ? &sum4_1 : &sum4_2;
 		sum1 += el;
 		sum2 += elSub;
-		*halfSum3 += elSub;
-		*halfSum4 += el;
+		sum3_1 += isEven ? elSub : 0;
+		sum3_2 += isEven ? 0 : elSub;
+		sum4_1 += isEven ? el : 0;
+		sum4_2 += isEven ? 0 : el;
 	}
 	const double end = omp_get_wtime();
 

@@ -15,7 +15,6 @@ double calcSum(double* arr, const int length) {
 }
 
 void fillArrRand(double* arr, const int length) {
-  #pragma omp parallel for if (PARALLEL)
 	for (int i = 0; i < length; i++)
 		arr[i] = (double)rand() / (double)RAND_MAX;
 }
@@ -46,16 +45,19 @@ int main() {
 		const int outputLength = layers[i];
 		const double sum = calcSum(arrIterable, inputLength);
     double* output = new double[outputLength];
+    double* weights = new double[outputLength];
+    for (int u = 0; u < outputLength; u++) weights[u] = distribution(generator);
 
     #pragma omp parallel for if (PARALLEL)
     for (int u = 0; u < outputLength; u++) {
-      const double weight = distribution(generator);
+      const double weight = weights[u];
       const double a = weight * sum + 1.0;
       const double expPlus = exp(a);
 	    const double expMinus = exp(-a);
 	    output[u] = (expPlus - expMinus) / (expPlus + expMinus);
     }
 
+		delete[] weights;
 		delete[] arrIterable;
 		arrIterable = output;
 	}

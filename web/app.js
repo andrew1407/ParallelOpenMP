@@ -287,7 +287,7 @@ const LABS = [
   },
   {
     id: 'lab4', tab: 'Lab 4', name: 'Koch & Hanoi', src: `${SRC}/4-lab/Parallel_OpenMP.cpp`,
-    intro: 'Two recursive workloads parallelised with <code>#pragma omp task … if(…)</code>. <code>KochSnowflake</code> splits a line into 4 segments per level and writes the points to an SVG (1500 × 500, drawn at depth 7). <code>HanoiTower</code> moves <i>h</i> disks from rod A to rod B in 2<sup>h</sup> − 1 moves. Both use the lab\'s classes. For the parallel runs, the page splits the task tree a few levels down and hands the subtrees to the workers.',
+    intro: 'Two recursive workloads parallelised with <code>#pragma omp task … if(…)</code>. <code>KochSnowflake</code> splits a line into 4 segments per level and writes the points to an SVG (1500 × 500, drawn at depth 7). <code>HanoiTower</code> moves <i>h</i> disks from rod A to rod B in 2<sup>h</sup> − 1 moves. Both use the lab\'s classes. The tasks are spawned by one thread (<code>single</code>) inside <code>#pragma omp parallel</code>, and every Koch leaf writes its two points into its own slots of the vector, so the order is the same as in the sequential run. For the parallel runs, the page splits the task tree a few levels down and hands the subtrees to the workers.',
     fields: [
       { key: 'draw', label: 'Koch depth to draw', value: 7, min: 0, max: 9 },
       { key: 'kochMax', label: 'Koch sweep: max depth', value: 10, min: 1, max: 10 },
@@ -296,7 +296,6 @@ const LABS = [
       workersField,
     ],
     hint: 'The lab sweeps Koch depths 0–13 and Hanoi heights 5–27. Depth 13 needs about 2 GB of points, which won\'t fit in WebAssembly memory, so the defaults are lower.',
-    note: 'In the lab, the tasks are created outside any <code>#pragma omp parallel</code> region, so the team has one thread and every task runs on the thread that created it. Its "parallel" timings measure the sequential code. If the tasks did run on several threads, <code>points.push_back</code> on the shared vector would be a data race, and the Hanoi moves would print out of order.',
     run: runLab4, render: renderLab4,
   },
   {
@@ -317,7 +316,6 @@ const LABS = [
     id: 'lab7', tab: 'Lab 7', name: 'MPI ranks', src: `${SRC}/7-lab-mpi/Parallel_OpenMP.cpp`,
     intro: 'Two MPI ranks each generate a 10 000-element array. Rank 1 sends the second half of <code>a</code> to rank 0 (tag 1), and rank 0 sends the first half of <code>b</code> to rank 1 (tag 2). Each rank then prints its half of <code>a[i] + b[i]</code> and its <code>MPI_Wtime</code>. Two workers run the lab\'s unchanged <code>main()</code> as ranks 0 and 1. <code>MPI_Send</code> posts the buffer to the page, which forwards it to the other rank, and <code>MPI_Recv</code> blocks the rank (through Asyncify) until it arrives.',
     fields: [],
-    note: 'Both ranks call <code>srand(time(NULL))</code> in the same second, so they draw the same random numbers: <code>a[i]</code> is r / 2 and <code>b[i]</code> is 2r for the same random r. Index 5000 is never scaled, because the conditions use <code>i &gt; halfSize</code> and <code>i &lt; halfSize</code>.',
     run: runLab7, render: renderLab7,
   },
   {
@@ -328,7 +326,7 @@ const LABS = [
       workersField,
     ],
     examples: [['10, 10, 30, 30, 40, 60, 60, 40, 30, 30, 1', 'lab layers'], ['10, 1000000, 1000000, 1000000, 1', 'wide'], ['10, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 100000, 1', 'deep']],
-    note: 'In the lab, <code>distribution(generator)</code> is called from every thread of the <code>parallel for</code>, so they share one <code>std::mt19937</code> without a lock, which is a data race. Here each worker has its own generator.',
+    note: 'Ported: the weights. The lab draws each layer\'s weights from one <code>std::mt19937</code> before its <code>parallel for</code>. Workers don\'t share memory, so here each worker draws the weights for its own chunk from its own generator.',
     run: runControl, render: renderControl,
   },
 ];
@@ -365,7 +363,7 @@ async function runLab2(p) {
   const at = startSoon();
   const t0 = performance.timeOrigin + performance.now();
   const { r } = await fork(p.threads, 'lab2', 'lab2', (tid) => ({ tid, n: p.threads, len: p.len, at }));
-  const coef = r[0].res.coef;
+  const coef = SEC_COEF;
   const threads = r.map((d, tid) => {
     // the k-th block that main() printed is thread k's
     const text = d.res.lines.join('\n');
@@ -388,8 +386,7 @@ function renderLab2(d, p) {
     `Total (both): ${fmtC((totalFill + totalCalc) / 1e3 * d.coef)} ns.`,
   ];
   const rows = T.map((t) => `<tr><td><span class="sw" style="background:var(${color(t.tid)})"></span>${t.tid}</td><td class="num">${t.lo}–${t.hi}</td><td class="num">${t.count.toLocaleString('en')}</td><td class="num">${fmt((t.count / p.len) * 100, 3)}%</td><td class="num">${msFmt(t.fill)}</td><td class="num">${msFmt(t.calc)}</td><td class="num">${msFmt(t.fill + t.calc)}</td><td class="num">${t.printed.join(' / ')}</td></tr>`).join('');
-  return `<p class="note">The lab converts seconds to "ns" with <code>const int secCoef = 10e9;</code>. 10e9 is 10<sup>10</sup>, not 10<sup>9</sup>, and doesn't fit in an <code>int</code>. Clang saturates it to ${d.coef.toLocaleString('en')}, so the printed "ns" values are seconds × ${d.coef.toExponential(3)}. The times below are converted back to milliseconds.</p>
-    <div class="stats">${stat(p.len.toLocaleString('en'), 'elements')}${stat(p.threads, 'threads')}${stat(`T${slow.tid}`, 'slowest thread')}${stat(fmt((slow.count / p.len) * 100, 2) + '%', 'its share of the array')}${stat(msFmt(totalFill), 'fill time, all threads')}${stat(msFmt(totalCalc), 'calc time, all threads')}</div>
+  return `<div class="stats">${stat(p.len.toLocaleString('en'), 'elements')}${stat(p.threads, 'threads')}${stat(`T${slow.tid}`, 'slowest thread')}${stat(fmt((slow.count / p.len) * 100, 2) + '%', 'its share of the array')}${stat(msFmt(totalFill), 'fill time, all threads')}${stat(msFmt(totalCalc), 'calc time, all threads')}</div>
     <div class="charts two">
       ${chart({ kind: 'bar', title: 'Time per thread', x: 'thread', y: 'time, ms', cats, series: [{ name: 'fill a[i] = i', ys: T.map((t) => t.fill), color: '--c1' }, { name: 'calc b[i]', ys: T.map((t) => t.calc), color: '--c2' }] })}
       ${chart({ kind: 'bar', title: 'Elements per thread', x: 'thread', y: 'elements', cats, series: [{ name: 'elements', ys: T.map((t) => t.count), color: '--c3' }] })}
@@ -398,6 +395,7 @@ function renderLab2(d, p) {
     <div class="table-wrap"><table><thead><tr><th>Thread</th><th class="num">Range</th><th class="num">Elements</th><th class="num">Share</th><th class="num">Fill</th><th class="num">Calc</th><th class="num">Total</th><th class="num">Printed "ns" (fill / calc / total)</th></tr></thead><tbody>${rows}</tbody></table></div></div>
     <div style="margin-top:16px">${consoleBlock('Program output', [...T.map((t) => t.block).join('\n\n').split('\n'), '', ...lastLines], 'each thread\'s block from its worker; totals added up as main() does')}</div>`;
 }
+const SEC_COEF = 1e9; // the lab's secCoef, seconds to ns
 const fmtC = (v) => String(+v.toPrecision(6)); // cout's default 6 significant digits
 
 // ------------------------------------------------------------------- lab 3 --
@@ -535,22 +533,21 @@ async function runLab5(p) {
 function renderLab5(d) {
   const a = d.builds['lab5-scalar'], b = d.builds['lab5-simd128'];
   const ex = exactSums();
-  const cols = [['calcSumsSeq', a.seqSums], ['calcSumsPar (omp simd)', a.parSums], ['calcSumsPar + simd128', b.parSums], ['rewrite + simd128', b.rewSums]];
+  const cols = [['calcSumsSeq', a.seqSums], ['calcSumsPar (omp simd)', a.parSums], ['calcSumsPar + simd128', b.parSums]];
   const withTotals = (s) => [...s, s[2] + s[3], s[4] + s[5]];
   const names = [...SUM_NAMES, 'sum3_1 + sum3_2', 'sum4_1 + sum4_2'];
   const exT = withTotals(ex);
   const rows = names.map((nm, i) => `<tr><td><code>${nm}</code></td>${cols.map(([, s]) => `<td class="num">${withTotals(s)[i].toPrecision(7)}</td>`).join('')}<td class="num muted">${exT[i].toPrecision(10)}</td></tr>`).join('');
   const cats = ['scalar build', '-msimd128 build'];
   const vec = b.par < a.par * 0.7;
-  return `<p class="note">Clang reports <i>"loop not vectorized"</i> for the lab's <code>omp simd</code> loop: each iteration adds through a pointer, <code>*halfSum3 += …</code>, chosen by <code>isEven ? &amp;sum3_1 : &amp;sum3_2</code>, which it can't turn into vector lanes. So <code>-msimd128</code> doesn't change the lab's code. For comparison, the last column and the "rewrite" bars use a version written for this page, not the lab's code. It adds <code>isEven ? elSub : 0</code> to each half instead, and that does vectorize.</p>
-    <div class="stats">${stat(msFmt(a.seq), 'calcSumsSeq')}${stat(msFmt(a.par), 'calcSumsPar (omp simd)')}${stat(msFmt(b.par), 'calcSumsPar, -msimd128')}${stat(msFmt(b.rew), 'rewrite, -msimd128')}${stat(`${fmt(a.par / b.rew, 2)}×`, 'rewrite + SIMD128 vs lab', 'good')}${stat(vec ? 'yes' : 'no', 'lab loop sped up by simd128', vec ? 'good' : '')}</div>
+  return `<div class="stats">${stat(msFmt(a.seq), 'calcSumsSeq')}${stat(msFmt(a.par), 'calcSumsPar (omp simd)')}${stat(msFmt(b.par), 'calcSumsPar, -msimd128')}${stat(`${fmt(a.seq / b.par, 2)}×`, 'SIMD128 vs sequential', a.seq / b.par > 1 ? 'good' : '')}${stat(vec ? 'yes' : 'no', 'omp simd loop sped up by simd128', vec ? 'good' : '')}</div>
     <div class="charts two">
-      ${chart({ kind: 'bar', title: 'Time per call', x: 'build', y: 'time, ms', cats, series: [{ name: 'calcSumsSeq', ys: [a.seq, b.seq], color: '--c2' }, { name: 'calcSumsPar (omp simd)', ys: [a.par, b.par], color: '--c1' }, { name: 'rewrite (not the lab\'s)', ys: [a.rew, b.rew], color: '--c3' }] })}
+      ${chart({ kind: 'bar', title: 'Time per call', x: 'build', y: 'time, ms', cats, series: [{ name: 'calcSumsSeq', ys: [a.seq, b.seq], color: '--c2' }, { name: 'calcSumsPar (omp simd)', ys: [a.par, b.par], color: '--c1' }] })}
       ${consoleBlock('Program output', d.out, 'the lab\'s main(), -fopenmp-simd build')}
     </div>
     <div data-copyable style="margin-top:16px"><div class="copy-head"><h2>Sums <small>· float, as printed with 7 digits; last column in double</small></h2>${actions('table')}</div>
     <div class="table-wrap"><table><thead><tr><th>Sum</th>${cols.map(([n]) => `<th class="num">${n}</th>`).join('')}<th class="num">double</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-    <p class="hint">The vectorized versions add in a different order, so their last digits can differ from the sequential loop. <code>s.clear()</code> resets <code>sum3_1</code> twice, which is harmless.</p>`;
+    <p class="hint">The vectorized loop adds in a different order, so its last digits can differ from the sequential loop.</p>`;
 }
 
 const LAB6_BUILDS = [
@@ -566,17 +563,15 @@ async function runLab6(p) {
 }
 function renderLab6(rows, p) {
   const cats = rows.map((r) => r.flags);
-  const tr = rows.map((r) => `<tr><td><code>em++ ${r.flags} -fopenmp-simd</code></td><td class="num">${msFmt(r.seq)}</td><td class="num">${msFmt(r.par)}</td><td class="num">${msFmt(r.seqKept)}</td><td class="num">${msFmt(r.parKept)}</td><td class="num">${msFmt(r.rewrite)}</td></tr>`).join('');
-  const o0 = rows[0], o3 = rows[3];
-  return `<p class="note">The lab's loop throws every result away (<code>sums s; calcSumsSeq(&amp;s);</code>), so from -O1 up the optimizer is allowed to drop the summation, and the "time" mostly measures the two <code>omp_get_wtime()</code> calls left in each call. The "kept" columns run the same calls but store each result, so the work can't be removed.</p>
-    <div class="stats">${stat(msFmt(o0.seq), 'Sequential, -O0 (as written)')}${stat(msFmt(o3.seq), 'Sequential, -O3 (as written)')}${stat(msFmt(o3.seqKept), 'Sequential, -O3 (kept)')}${stat(msFmt(o3.parKept), 'Parallel, -O3 (kept)')}${stat(msFmt(rows[5].rewrite), 'rewrite, -O3 -msimd128')}</div>
+  const tr = rows.map((r) => `<tr><td><code>em++ ${r.flags} -fopenmp-simd</code></td><td class="num">${msFmt(r.seq)}</td><td class="num">${msFmt(r.par)}</td><td class="num">${fmt(r.seq / r.par, 2)}×</td></tr>`).join('');
+  const o0 = rows[0], o3 = rows[3], simd = rows[5];
+  return `<div class="stats">${stat(msFmt(o0.seq), 'Sequential, -O0')}${stat(msFmt(o3.seq), 'Sequential, -O3')}${stat(msFmt(o3.par), 'Parallel, -O3')}${stat(msFmt(simd.par), 'Parallel, -O3 -msimd128')}${stat(`${fmt(o0.seq / simd.par, 1)}×`, '-O0 sequential vs -O3 -msimd128 parallel', 'good')}</div>
     <div class="charts">
-      ${chart({ kind: 'bar', rotate: true, height: 300, title: `${p.reps.toLocaleString('en')} calls per kernel, as the lab writes it`, x: 'build', y: 'time, ms', logY: true, cats, series: [{ name: 'Sequential', ys: rows.map((r) => r.seq), color: '--c2' }, { name: 'Parallel', ys: rows.map((r) => r.par), color: '--c1' }] })}
-      ${chart({ kind: 'bar', rotate: true, height: 300, title: 'Same calls with the results kept', x: 'build', y: 'time, ms', cats, series: [{ name: 'Sequential', ys: rows.map((r) => r.seqKept), color: '--c2' }, { name: 'Parallel', ys: rows.map((r) => r.parKept), color: '--c1' }, { name: 'rewrite (not the lab\'s)', ys: rows.map((r) => r.rewrite), color: '--c3' }] })}
+      ${chart({ kind: 'bar', rotate: true, height: 300, title: `${p.reps.toLocaleString('en')} calls per kernel`, x: 'build', y: 'time, ms', logY: true, cats, series: [{ name: 'Sequential', ys: rows.map((r) => r.seq), color: '--c2' }, { name: 'Parallel', ys: rows.map((r) => r.par), color: '--c1' }] })}
     </div>
     <div data-copyable style="margin-top:16px"><div class="copy-head"><h2>Builds <small>· the lab prints "Sequential" and "Parallel"</small></h2>${actions('table')}</div>
-    <div class="table-wrap"><table><thead><tr><th>Build</th><th class="num">Sequential</th><th class="num">Parallel</th><th class="num">Sequential (kept)</th><th class="num">Parallel (kept)</th><th class="num">Rewrite (kept)</th></tr></thead><tbody>${tr}</tbody></table></div></div>
-    <p class="hint">The <code>icc</code> options in <code>commands.txt</code> (<code>-prof-gen</code>/<code>-prof-use</code>, <code>-parallel</code>) have no emscripten counterpart, so they're left out.</p>`;
+    <div class="table-wrap"><table><thead><tr><th>Build</th><th class="num">Sequential</th><th class="num">Parallel</th><th class="num">Sequential / Parallel</th></tr></thead><tbody>${tr}</tbody></table></div></div>
+    <p class="hint">Every result goes into the lab's <code>volatile</code> checksum, so the optimizer can't drop the calls at any level. The <code>icc</code> options in <code>commands.txt</code> (<code>-prof-gen</code>/<code>-prof-use</code>, <code>-parallel</code>) have no emscripten counterpart, so they're left out.</p>`;
 }
 
 // ------------------------------------------------------------------- lab 7 --
@@ -600,13 +595,12 @@ async function runLab7() {
 function renderLab7(d) {
   const sends = d.events.filter((e) => e.type === 'mpi');
   const both = [...d.ranks[1].pairs, ...d.ranks[0].pairs].sort((a, b) => a[0] - b[0]);
-  // same seed: b[i] = 2r and a[i] = r / 2 for the same random r (a[i] = 1 when r = 0)
-  const ratio = both.filter(([i, a, b]) => i < 5000 && b % 2 === 0 && (Math.floor(b / 4) === a || (b === 0 && a === 1))).length;
+  const mid = both.find((x) => x[0] === 5000);
   return `<div class="stats">${stat(msFmt(d.ranks[0].ms), 'rank 0 MPI_Wtime')}${stat(msFmt(d.ranks[1].ms), 'rank 1 MPI_Wtime')}${stat(sends.length, 'messages')}${stat(`${(sends.reduce((s, e) => s + e.bytes, 0) / 1024).toFixed(1)} KB`, 'sent in total')}${stat(both.length.toLocaleString('en'), 'sums printed')}</div>
     <div class="panel inset" data-copyable data-title="MPI message timeline" id="mpi-box"><div class="copy-head"><h2>Message timeline <small>· ms since the page started both ranks</small></h2>${actions('png')}</div><div class="gantt" id="mpi-timeline"></div>
       <div class="legend"><span><span class="sw" style="background:var(--c1)"></span>rank running main()</span><span><span class="sw" style="background:var(--c2)"></span>blocked in MPI_Recv</span><span><span class="sw" style="background:var(--c3)"></span>MPI_Send → delivery</span></div></div>
     ${chart({ title: 'a[i] + b[i] by index', x: 'i', y: 'sum', series: [{ name: 'rank 1 (i < 5000)', xs: d.ranks[1].pairs.map((x) => x[0]), ys: d.ranks[1].pairs.map((x) => x[3]), color: '--c1' }, { name: 'rank 0 (i ≥ 5000)', xs: d.ranks[0].pairs.map((x) => x[0]), ys: d.ranks[0].pairs.map((x) => x[3]), color: '--c2' }] })}
-    <p class="hint">In the first half, a[i] = r / 2 and b[i] = 2r for the same random r in ${ratio.toLocaleString('en')} of 5000 rows, because both ranks used the same seed.</p>
+    <p class="hint">Each rank seeds with <code>time(NULL) + worldRank</code>, so the two arrays differ. In the first half <code>a[i]</code> is halved and <code>b[i]</code> doubled, and the other way round from index 5000 on${mid ? ` (row 5000: ${mid[1]} + ${mid[2]} = ${mid[3]})` : ''}.</p>
     <div class="two-col" style="margin-top:16px">${[1, 0].map((r) => consoleBlock(`Rank ${r} output`, d.ranks[r].lines, `${d.ranks[r].lines.length.toLocaleString('en')} lines`)).join('')}</div>`;
 }
 function drawMpiTimeline(el, d) {

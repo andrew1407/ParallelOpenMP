@@ -13,5 +13,3 @@ int lab2_threads = 8, lab2_len = 16000;
 extern "C" EMSCRIPTEN_KEEPALIVE int run_main() { return lab_main(); }
 
 extern "C" EMSCRIPTEN_KEEPALIVE void lab2_set(int threads, int len) { lab2_threads = threads; lab2_len = len; }
-// What the lab's `const int secCoef = 10e9;` becomes with this compiler (10e9 doesn't fit in an int).
-extern "C" EMSCRIPTEN_KEEPALIVE double lab2_sec_coef() { const int secCoef = 10e9; return secCoef; }

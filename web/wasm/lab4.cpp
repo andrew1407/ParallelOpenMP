@@ -1,6 +1,7 @@
 // Lab 4: the lab's KochSnowflake and HanoiTower classes. Their recursive helpers are
 // private, so they're opened up here to hand subtrees of the task tree to workers.
 #include <cstdio>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include <fstream>
@@ -35,16 +36,20 @@ EMSCRIPTEN_KEEPALIVE int koch_count() { return ks.points.size(); }
 EMSCRIPTEN_KEEPALIVE const double* koch_data() { return &ks.points[0].first; }
 
 // One worker's share: run fractalize() to `levels` to get the 4^levels task lines, then
-// fractalize the lines [first, first + count) the rest of the way down.
+// fractalize the lines [first, first + count) the rest of the way down, each into its
+// own slots of `points` as the lab's tasks do.
 EMSCRIPTEN_KEEPALIVE double koch_part(int depth, int levels, int first, int count) {
   const double start = omp_get_wtime();
   ks.points.clear();
   if (!depth) { if (!first) ks.calcFractalPoints(0); return omp_get_wtime() - start; }
-  ks.fractalize(levels, ks.getInitialPoints());
+  ks.points.resize(2 * (size_t)pow(4, levels));
+  ks.fractalize(levels, ks.getInitialPoints(), 0);
   kochLines.clear();
   for (size_t i = 0; i + 1 < ks.points.size(); i += 2) kochLines.push_back(make_pair(ks.points[i], ks.points[i + 1]));
-  ks.points.clear();
-  for (int j = first; j < first + count && j < (int)kochLines.size(); j++) ks.fractalize(depth - levels, kochLines[j]);
+  count = std::max(0, std::min(count, (int)kochLines.size() - first));
+  const size_t step = 2 * (size_t)pow(4, depth - levels);
+  ks.points.assign(step * count, point());
+  for (int j = 0; j < count; j++) ks.fractalize(depth - levels, kochLines[first + j], j * step);
   return omp_get_wtime() - start;
 }
 

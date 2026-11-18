@@ -31,7 +31,10 @@ class KochSnowflake {
       const line initialLine = getInitialPoints();
 
       if (depth) {
-        fractalize(depth, initialLine);
+        points.resize(2 * (size_t)pow(4, depth));
+        #pragma omp parallel if (isParallel)
+        #pragma omp single
+        fractalize(depth, initialLine, 0);
       } else {
         points.push_back(initialLine.first);
         points.push_back(initialLine.second);
@@ -64,13 +67,15 @@ class KochSnowflake {
       return make_pair(a, b);
     }
 
-    void fractalize(const int depth, const line currentLine) {
+    // Each leaf writes its two points into its own slots, starting at `offset`,
+    // so tasks never touch the same element and the order stays the same.
+    void fractalize(const int depth, const line currentLine, const size_t offset) {
       const point *p1 = &currentLine.first;
       const point *p2 = &currentLine.second;
 
       if (!depth) {
-        points.push_back(currentLine.first);
-        points.push_back(currentLine.second);
+        points[offset] = currentLine.first;
+        points[offset + 1] = currentLine.second;
         return;
       }
 
@@ -94,13 +99,14 @@ class KochSnowflake {
       const line line3 = make_pair(p4, p5);
       const line line4 = make_pair(p5, *p2);
 
-      #pragma omp task shared(points) if (isParallel && depth > 1)
-      fractalize(depth - 1, line1);
-      #pragma omp task shared(points) if (isParallel && depth > 1)
-      fractalize(depth - 1, line2);
-      #pragma omp task shared(points) if (isParallel && depth > 1)
-      fractalize(depth - 1, line3);
-      #pragma omp task shared(points) if (isParallel && depth > 1)
-      fractalize(depth - 1, line4);
+      const size_t step = 2 * (size_t)pow(4, depth - 1);
+      #pragma omp task if (isParallel && depth > 1)
+      fractalize(depth - 1, line1, offset);
+      #pragma omp task if (isParallel && depth > 1)
+      fractalize(depth - 1, line2, offset + step);
+      #pragma omp task if (isParallel && depth > 1)
+      fractalize(depth - 1, line3, offset + 2 * step);
+      #pragma omp task if (isParallel && depth > 1)
+      fractalize(depth - 1, line4, offset + 3 * step);
     }
 };

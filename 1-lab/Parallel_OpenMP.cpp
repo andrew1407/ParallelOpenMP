@@ -13,7 +13,7 @@ using namespace std;
 
 int main()
 {
-	const char const *outputStr = "Hello world, my name is Golovko Andrew Andreevich!!!";
+	const char *const outputStr = "Hello world";
 	const unsigned int processor_count = std::thread::hardware_concurrency();
 
 	omp_set_num_threads(processor_count);

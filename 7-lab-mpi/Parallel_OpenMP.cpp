@@ -11,18 +11,18 @@ void generateElements(int* arr, const int rank) {
     for (int i = 0; i < ARRAY_SZIE; i++) {
         arr[i] = rand() % 100;
         if (rank && arr[i] == 0) arr[i]++;
-        if (rank && i > halfSize || !rank && i < halfSize) arr[i] *= 2;
-        else if (rank && i < halfSize || !rank && i > halfSize) arr[i] /= 2;
+        if (rank && i >= halfSize || !rank && i < halfSize) arr[i] *= 2;
+        else if (rank && i < halfSize || !rank && i >= halfSize) arr[i] /= 2;
     }
 }
 
 int main(int argc, char **argv) {
-    srand(time(NULL));
     int worldRank;
     MPI_Status status;
     const int halfSize = ARRAY_SZIE / 2;
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &worldRank);
+    srand(time(NULL) + worldRank);
 
     if (worldRank == 1) {
         int a[ARRAY_SZIE];

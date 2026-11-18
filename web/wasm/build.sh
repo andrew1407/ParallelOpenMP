@@ -19,8 +19,8 @@ build() { # name, flags..., sources...
 emcc -O3 -Iinclude -c omp_stub.c -o "$OUT/omp_stub.o"
 STUB="$OUT/omp_stub.o"
 
-build lab1 -O3 lab1.cpp "$STUB" -Wno-duplicate-decl-specifier
-build lab2 -O3 lab2.cpp "$STUB" -Wno-literal-conversion
+build lab1 -O3 lab1.cpp "$STUB"
+build lab2 -O3 lab2.cpp "$STUB"
 build lab3 -O3 lab3.cpp "$STUB"
 build lab4 -O3 lab4.cpp "$STUB" -sINITIAL_MEMORY=64MB -sMAXIMUM_MEMORY=2GB
 build control -O3 control.cpp "$STUB"

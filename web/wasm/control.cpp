@@ -13,11 +13,10 @@ extern "C" EMSCRIPTEN_KEEPALIVE int run_main() { return lab_main(); }
 static std::random_device rd;
 static std::mt19937 generator(rd());
 static std::uniform_real_distribution<double> distribution(0.0, 1.0);
-static std::vector<double> chunk, next, sums;
+static std::vector<double> chunk, next, sums, weights;
 
 // One output neuron, the body of the lab's inner `parallel for`.
-static inline double neuron(const double sum) {
-  const double weight = distribution(generator);
+static inline double neuron(const double weight, const double sum) {
   const double a = weight * sum + 1.0;
   const double expPlus = exp(a);
   const double expMinus = exp(-a);
@@ -39,7 +38,10 @@ EMSCRIPTEN_KEEPALIVE double ctrl_seq(const int* layers, int count) {
     const double sum = calcSum(arrIterable, inputLength);
     sums.push_back(sum);
     double* output = new double[outputLength];
-    for (int u = 0; u < outputLength; u++) output[u] = neuron(sum);
+    double* weights = new double[outputLength];
+    for (int u = 0; u < outputLength; u++) weights[u] = distribution(generator);
+    for (int u = 0; u < outputLength; u++) output[u] = neuron(weights[u], sum);
+    delete[] weights;
     delete[] arrIterable;
     arrIterable = output;
   }
@@ -55,10 +57,13 @@ EMSCRIPTEN_KEEPALIVE double ctrl_init(int length) {
   if (length) fillArrRand(chunk.data(), length);
   return length ? calcSum(chunk.data(), length) : 0.0;
 }
-// Worker side: this thread's chunk of the next layer from the reduced sum, and its partial sum.
+// Worker side: this thread's chunk of the next layer from the reduced sum, and its partial
+// sum. Each worker draws its chunk's weights from its own generator.
 EMSCRIPTEN_KEEPALIVE double ctrl_layer(double sum, int length) {
   next.resize(length);
-  for (int u = 0; u < length; u++) next[u] = neuron(sum);
+  weights.resize(length);
+  for (int u = 0; u < length; u++) weights[u] = distribution(generator);
+  for (int u = 0; u < length; u++) next[u] = neuron(weights[u], sum);
   chunk.swap(next);
   return length ? calcSum(chunk.data(), length) : 0.0;
 }
