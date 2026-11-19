@@ -37,6 +37,7 @@ jobs:
           mkdir -p _site/web
           cp web/*.html web/*.js web/*.svg _site/web/
           cp -r web/build _site/web/
+          cp -r web/gpu _site/web/
           for lab in 1-lab 2-lab 3-lab 4-lab 5-lab 6-lab 7-lab-mpi control-task; do
             mkdir -p "_site/$lab" && cp "$lab"/*.cpp "_site/$lab/"
           done

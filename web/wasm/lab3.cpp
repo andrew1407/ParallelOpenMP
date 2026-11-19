@@ -57,6 +57,14 @@ EMSCRIPTEN_KEEPALIVE double lab3_chunk(int tid, int n) {
   return omp_get_wtime() - start;
 }
 
+// Copy A and B row by row into flat buffers, for the page's GPU port.
+EMSCRIPTEN_KEEPALIVE void lab3_inputs(BASE_TYPE* a, BASE_TYPE* b) {
+  for (int i = 0; i < SIZE; i++) {
+    std::copy(A[i], A[i] + SIZE, a + (long long)i * SIZE);
+    std::copy(B[i], B[i] + SIZE, b + (long long)i * SIZE);
+  }
+}
+
 // Copy C row by row into a flat buffer for the page.
 EMSCRIPTEN_KEEPALIVE void lab3_result(BASE_TYPE* out) {
   for (int i = 0; i < SIZE; i++) std::copy(C[i], C[i] + SIZE, out + (long long)i * SIZE);

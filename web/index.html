@@ -12,14 +12,14 @@
       --bg: #f6f7f9; --panel: #ffffff; --ink: #1b1f24; --muted: #5d6673; --line: #dfe3e8; --grid: #eceff3;
       --accent: #3557d6; --accent-ink: #ffffff; --soft: #eef1fb; --err: #c0362c; --err-soft: #fdecea; --ok: #1f8a4c; --ok-soft: #e3f4ea;
       --c1: #3557d6; --c2: #d4731f; --c3: #1f8a4c; --c4: #8152c2; --c5: #c0362c; --c6: #1d8ea3; --c7: #b8971b;
-      --cpp: #2f6fb3; --cpp-soft: #dde9f7; --c8: #6b7a8f;
+      --cpp: #2f6fb3; --cpp-soft: #dde9f7; --c8: #6b7a8f; --gpu-badge: #1f8a4c; --gpu-soft: #e3f4ea;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
       color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         --bg: #111418; --panel: #191d23; --ink: #e6e9ee; --muted: #9aa4b2; --line: #2b313a; --grid: #222830;
-        --accent: #7c97ff; --accent-ink: #0d1117; --soft: #1f2636; --err: #ff7b72; --err-soft: #3a1d1c; --ok: #4fd18b; --ok-soft: #16301f;
+        --accent: #7c97ff; --accent-ink: #0d1117; --gpu-badge: #4fd18b; --gpu-soft: #16301f; --soft: #1f2636; --err: #ff7b72; --err-soft: #3a1d1c; --ok: #4fd18b; --ok-soft: #16301f;
         --c1: #7c97ff; --c2: #f0a050; --c3: #4fd18b; --c4: #b48cf0; --c5: #ff7b72; --c6: #4cc4d8; --c7: #e0c050;
         --cpp: #6ea8e8; --cpp-soft: #172a40; --c8: #a3b1c4;
         color-scheme: dark;
@@ -27,7 +27,7 @@
     }
     :root[data-theme="dark"] {
       --bg: #111418; --panel: #191d23; --ink: #e6e9ee; --muted: #9aa4b2; --line: #2b313a; --grid: #222830;
-      --accent: #7c97ff; --accent-ink: #0d1117; --soft: #1f2636; --err: #ff7b72; --err-soft: #3a1d1c; --ok: #4fd18b; --ok-soft: #16301f;
+      --accent: #7c97ff; --accent-ink: #0d1117; --gpu-badge: #4fd18b; --gpu-soft: #16301f; --soft: #1f2636; --err: #ff7b72; --err-soft: #3a1d1c; --ok: #4fd18b; --ok-soft: #16301f;
       --c1: #7c97ff; --c2: #f0a050; --c3: #4fd18b; --c4: #b48cf0; --c5: #ff7b72; --c6: #4cc4d8; --c7: #e0c050;
       --cpp: #6ea8e8; --cpp-soft: #172a40; --c8: #a3b1c4;
       color-scheme: dark;
@@ -162,6 +162,7 @@
 
     .charts > *, .two-col > * { min-width: 0; }
     .field.xwide input { width: 420px; max-width: 100%; }
+    .field.select select { width: auto; max-width: 100%; }
     h2.sub { font-size: 15px; color: var(--ink); text-transform: none; letter-spacing: 0; margin: 26px 0 12px; padding-top: 16px; border-top: 1px solid var(--line); }
     .out > h2.sub:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; }
     h3.sub3 { font-size: 14px; margin: 20px 0 10px; color: var(--muted); font-weight: 600; }
@@ -175,6 +176,62 @@
     details.how p, details.how li { color: var(--muted); max-width: 920px; }
     details.how ul { margin: 6px 0 0; padding-left: 20px; }
     @media (max-width: 720px) { .field.xwide { flex: 1 1 100%; } .field.xwide input { width: 100%; } }
+    /* Compute switch: a pill-shaped segmented control with a sliding thumb.
+       Markup:
+       <div class="compute-switch" role="radiogroup" aria-label="Compute" style="--n:2;--i:0">
+         <label><input type="radio" name="…" value="gpu" checked><svg …/>GPU<span class="cs-chip">WebGPU</span></label>
+         <label><input type="radio" name="…" value="cpu"><svg …/>CPU</label>
+       </div>
+       Set --n to the number of segments and --i to the checked index (JS updates --i on change). */
+    .compute-switch {
+      --cs-h: 38px;
+      position: relative; display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr;
+      align-items: stretch; height: var(--cs-h); padding: 3px; gap: 0;
+      border: 1px solid var(--line); border-radius: 999px; background: var(--soft);
+      transition: opacity .2s ease;
+    }
+    .compute-switch.cs-pending { opacity: .45; pointer-events: none; }
+    .compute-switch::before {
+      content: ""; position: absolute; top: 3px; bottom: 3px; left: 3px;
+      width: calc((100% - 6px) / var(--n, 2));
+      transform: translateX(calc(100% * var(--i, 0)));
+      border-radius: 999px; background: var(--accent);
+      box-shadow: 0 1px 3px rgb(0 0 0 / .25);
+      transition: transform .18s cubic-bezier(.3, .7, .4, 1);
+    }
+    .compute-switch label {
+      position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 0 14px; border-radius: 999px; white-space: nowrap; cursor: pointer; user-select: none;
+      font-size: 13.5px; font-weight: 600; color: var(--muted); transition: color .18s ease;
+    }
+    .compute-switch label:hover { color: var(--ink); }
+    .compute-switch label:has(input:checked) { color: var(--on-accent, #fff); }
+    .compute-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+    .compute-switch label:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .compute-switch svg { width: 14px; height: 14px; flex: none; }
+    .compute-switch .cs-chip {
+      padding: 1px 6px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+      background: color-mix(in srgb, currentColor 16%, transparent);
+    }
+    @media (max-width: 480px) {
+      .compute-switch label { padding: 0 9px; gap: 4px; font-size: 12.5px; }
+      .compute-switch .cs-chip { font-size: 9.5px; padding: 1px 5px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .compute-switch::before, .compute-switch label, .compute-switch { transition: none; }
+    }
+    /* "GPU" badge on lab tabs */
+    .gpu-badge {
+      display: inline-block; padding: 1px 5px; border-radius: 4px; border: 1px solid currentColor;
+      font: 700 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .03em;
+      color: var(--gpu-badge, #2f9e6b); vertical-align: 1px;
+    }
+    /* page-local: the switch's text on the accent, its height next to the inputs, the GPU badge in the .lang shape */
+    :root { --on-accent: var(--accent-ink); }
+    .field.compute { gap: 3px; }
+    .params .compute-switch { --cs-h: 39px; }
+    .compute-switch .cs-chip:empty { display: none; }
+    nav.labs .gpu-badge { font: 600 10px/1 system-ui, sans-serif; letter-spacing: .04em; padding: 3px 5px; border-radius: 5px; vertical-align: baseline; background: var(--gpu-soft); }
   </style>
 </head>
 <body>
@@ -196,6 +253,7 @@
       <li>A parallel region is a <b>fork</b> over N Web Workers, each running the same WebAssembly module. Each worker gets the thread number and the share of the loop or task tree that OpenMP would give that thread (the default static schedule, the same chunking as the lab). The <b>join</b> is waiting for every reply, and reductions and <code>atomic</code> updates are added up from the replies.</li>
       <li>Workers don't share memory, so the inputs a thread needs are rebuilt in each worker (the same seed) or sent along, and the results come back as copies. That cost is included in the wall-clock times, measured on the page from fork to join.</li>
       <li><code>#pragma omp simd</code> (labs 5–6) doesn't use threads. <code>-fopenmp-simd</code> makes clang honour it without a runtime, and <code>-msimd128</code> lets it use WebAssembly SIMD.</li>
+      <li>GPU mode (labs 3, 5 and 6, off by default): a port of the lab's computation, not the lab's own code, to a WebGPU compute shader in f32 (int for lab 3), or to a WebGL2 fragment shader with float render targets when there is no WebGPU. It runs after the CPU runs, and its time and its check against the CPU result are shown next to theirs.</li>
       <li>MPI (lab 7): each rank is a worker running the lab's <code>main()</code>. <code>MPI_Send</code> posts the buffer through the page to the other rank, and a blocking <code>MPI_Recv</code> waits for it with Asyncify.</li>
     </ul>
   </details>

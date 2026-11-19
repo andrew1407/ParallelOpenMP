@@ -58,6 +58,13 @@ const TASKS = {
   lab3setup(M, { size, seed }) { M._lab3_setup(size, seed); return {}; },
   lab3seq(M, { size }) { const sec = M._lab3_seq(); return lab3C(M, size, sec); },
   lab3chunk(M, { tid, n, size }) { const sec = M._lab3_chunk(tid, n); return lab3C(M, size, sec); },
+  lab3inputs(M, { size }) { // A and B for the GPU port
+    const n = size * size, pa = M._malloc(n * 4), pb = M._malloc(n * 4);
+    M._lab3_inputs(pa, pb);
+    const A = M.HEAP32.slice(pa >> 2, (pa >> 2) + n), B = M.HEAP32.slice(pb >> 2, (pb >> 2) + n);
+    M._free(pa); M._free(pb);
+    return { A, B, transfer: [A.buffer, B.buffer] };
+  },
 
   kochSvg(M, { depth }) {
     M._koch_svg(depth);

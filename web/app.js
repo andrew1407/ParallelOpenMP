@@ -1,7 +1,10 @@
 // Parallel OpenMP Labs showcase: lab panels, SVG charts, and the worker "threads".
 // The labs' C++ is compiled to WebAssembly (wasm/build.sh -> build/*.mjs). A parallel
 // region is a fork over N Web Workers (worker.js), each running the same module on the
-// share OpenMP would give that thread; the join is waiting for all N replies.
+// share OpenMP would give that thread; the join is waiting for all N replies. Labs 3, 5 and 6
+// also have an optional GPU mode (gpu/): a WebGPU or WebGL2 port of the lab's computation.
+
+import * as G from './gpu/labs.js';
 
 const REPO = 'https://github.com/Andrew1407/ParallelOpenMP';
 const SRC = `${REPO}/blob/main`;
@@ -221,7 +224,7 @@ function drawBars(plot, spec) {
     const ci = Math.floor((px - M.l) / bw);
     if (ci < 0 || ci >= n) return hide();
     band.setAttribute('x', M.l + ci * bw); band.setAttribute('visibility', 'visible');
-    tip.innerHTML = `<div class="tx">${esc(spec.cats[ci])}</div>` + spec.series.map((s) => `<div><i style="background:var(${s.color})"></i>${esc(s.name || spec.y)}: ${fmt(s.ys[ci], 6)}</div>`).join('');
+    tip.innerHTML = `<div class="tx">${esc(spec.cats[ci])}</div>` + spec.series.filter((s) => Number.isFinite(s.ys[ci])).map((s) => `<div><i style="background:var(${s.color})"></i>${esc(s.name || spec.y)}: ${fmt(s.ys[ci], 6)}</div>`).join('');
     placeTip(tip, rect, ((M.l + ci * bw + bw / 2) / W) * rect.width);
   };
   const hide = () => { tip.hidden = true; band.setAttribute('visibility', 'hidden'); };
@@ -231,19 +234,22 @@ function drawBars(plot, spec) {
 }
 
 // Shared pieces for the timing labs.
-const speedupCharts = (rows, seqMs, what = 'workers') => {
+// `gpu` ({ label, ms }) adds the GPU run as a flat line, it doesn't depend on the worker count
+const speedupCharts = (rows, seqMs, what = 'workers', gpu = null) => {
   const ns = rows.map((r) => r.n);
+  const flat = (name, v, color) => (gpu ? [{ name, xs: ns, ys: ns.map(() => v), color, dash: true }] : []);
   return `<div class="charts two">
-    ${chart({ title: `Wall-clock time vs ${what}`, x: what, y: 'time, ms', xTicks: ns, series: [{ name: 'workers', xs: ns, ys: rows.map((r) => r.ms), color: '--c1' }, { name: 'sequential', xs: ns, ys: ns.map(() => seqMs), color: '--c2', dash: true }] })}
-    ${chart({ title: 'Speedup over the sequential run', x: what, y: 'speedup ×', xTicks: ns, series: [{ name: 'measured', xs: ns, ys: rows.map((r) => seqMs / r.ms), color: '--c3' }, { name: 'ideal', xs: ns, ys: ns, color: '--muted', dash: true }] })}
+    ${chart({ title: `Wall-clock time vs ${what}`, x: what, y: 'time, ms', xTicks: ns, series: [{ name: 'workers', xs: ns, ys: rows.map((r) => r.ms), color: '--c1' }, { name: 'sequential', xs: ns, ys: ns.map(() => seqMs), color: '--c2', dash: true }, ...flat(gpu?.label, gpu?.ms, '--c5')] })}
+    ${chart({ title: 'Speedup over the sequential run', x: what, y: 'speedup ×', xTicks: ns, series: [{ name: 'measured', xs: ns, ys: rows.map((r) => seqMs / r.ms), color: '--c3' }, { name: 'ideal', xs: ns, ys: ns, color: '--muted', dash: true }, ...flat(gpu?.label, seqMs / gpu?.ms, '--c5')] })}
   </div>`;
 };
 // `worst` is the slowest worker's own timer (omp_get_wtime inside the wasm), when there is one
-const timingTable = (rows, seqMs, extra = []) => {
+const timingTable = (rows, seqMs, extra = [], gpu = null) => {
   const worst = rows.some((r) => Number.isFinite(r.worst));
+  const gpuRow = gpu ? `<tr class="gpu-row"><td class="num">${esc(gpu.label)}</td><td class="num">${msFmt(gpu.ms)}</td>${worst ? '<td class="num muted">–</td>' : ''}<td class="num">${fmt(seqMs / gpu.ms, 2)}×</td><td class="num muted">–</td>${extra.map((e) => `<td>${e.cell(gpu)}</td>`).join('')}</tr>` : '';
   return `<div data-copyable><div class="copy-head" style="margin-top:16px"><h2>Timings <small>· sequential ${msFmt(seqMs)}</small></h2>${actions('table')}</div>
   <div class="table-wrap"><table><thead><tr><th class="num">Workers</th><th class="num">Wall clock</th>${worst ? '<th class="num">Slowest worker, own timer</th>' : ''}<th class="num">Speedup</th><th class="num">Efficiency</th>${extra.map((e) => `<th>${e.head}</th>`).join('')}</tr></thead><tbody>
-  ${rows.map((r) => `<tr><td class="num">${r.n}</td><td class="num">${msFmt(r.ms)}</td>${worst ? `<td class="num">${msFmt(r.worst)}</td>` : ''}<td class="num">${fmt(seqMs / r.ms, 2)}×</td><td class="num">${fmt((seqMs / r.ms / r.n) * 100, 1)}%</td>${extra.map((e) => `<td>${e.cell(r)}</td>`).join('')}</tr>`).join('')}
+  ${rows.map((r) => `<tr><td class="num">${r.n}</td><td class="num">${msFmt(r.ms)}</td>${worst ? `<td class="num">${msFmt(r.worst)}</td>` : ''}<td class="num">${fmt(seqMs / r.ms, 2)}×</td><td class="num">${fmt((seqMs / r.ms / r.n) * 100, 1)}%</td>${extra.map((e) => `<td>${e.cell(r)}</td>`).join('')}</tr>`).join('')}${gpuRow}
   </tbody></table></div></div>`;
 };
 const consoleBlock = (title, lines, note = '') => `<div data-copyable data-title="${esc(title)}"><div class="copy-head"><h2>${esc(title)}${note ? ` <small>· ${note}</small>` : ''}</h2>${actions('text')}</div><pre class="console">${esc(lines.join('\n'))}</pre></div>`;
@@ -253,6 +259,10 @@ const sameArrays = (a, b) => a.length === b.length && a.every((v, i) => v === b[
 // -------------------------------------------------------------- lab panels --
 const workersField = { key: 'threads', label: 'Workers (threads)', value: '1, 2, 4, 8', type: 'text', list: true, wide: true };
 const parseList = (s) => String(s).split(/[\s,;]+/).filter(Boolean).map(Number);
+// Compute mode: CPU is the lab as before; GPU adds a run of the GPU port next to it.
+const modeField = { key: 'mode', label: 'Compute', type: 'compute' };
+const GPU_NOTE = 'GPU mode is a port of this lab\'s computation to a WebGPU compute shader (WebGL2 fragment shader as the fallback) in f32, not the lab\'s own code.';
+const gpuLabel = () => `GPU · ${G.backendName()}`;
 
 const LABS = [
   {
@@ -281,7 +291,9 @@ const LABS = [
     fields: [
       { key: 'size', label: 'SIZE', value: 500, min: 10, max: 900 },
       workersField,
+      modeField,
     ],
+    gpu: 'GPU port: a tiled kernel, one invocation per C[i][u], with 16 × 16 tiles of A and B staged in workgroup memory. Products and sums stay below 2<sup>24</sup>, so C must match exactly.',
     note: 'Ported: the worker share. The sequential run is the lab\'s <code>multiply()</code>. In the parallel runs, worker <i>k</i> runs the same loop body over the block of the SIZE³ (i, u, t) space that the static schedule gives thread <i>k</i>. Workers don\'t share memory, so instead of the <code>atomic</code>, each one fills its own C and the page adds them up after the join.',
     run: runLab3, render: renderLab3,
   },
@@ -301,14 +313,16 @@ const LABS = [
   {
     id: 'lab5', tab: 'Lab 5', name: 'SIMD reduction', src: `${SRC}/5-lab/Parallel_OpenMP.cpp`,
     intro: 'Sums 1/(i+1) and 1/(RANGE−i) for i &lt; 10 000 in <code>float</code>, both in total and split by even/odd index, once in a plain loop and once under <code>#pragma omp simd reduction(+: …)</code>. <code>omp simd</code> asks for vector instructions within one thread, so there are no workers here. Instead, the lab is built twice: with <code>-fopenmp-simd</code> (clang honours the pragma, no runtime needed), and again with <code>-msimd128</code> added so WebAssembly SIMD can be used.',
-    fields: [{ key: 'reps', label: 'Timing: calls averaged', value: 500, min: 1, max: 20000 }],
+    fields: [{ key: 'reps', label: 'Timing: calls averaged', value: 500, min: 1, max: 20000 }, modeField],
+    gpu: 'GPU port of <code>calcSumsPar</code>: a two-level parallel reduction. 10 workgroups of 256 invocations each add 4 elements per invocation and tree-reduce the six sums in workgroup memory, then one workgroup reduces the 10 partials (WebGL2: 40 fragments of 256 elements, then one fragment). GPU time is per call, averaged over the same number of calls.',
     hint: 'One call takes tens of microseconds, below the timer resolution in a worker, so each time is the average over many calls. The lab\'s own timings, printed by its <code>main()</code>, show what a single call measures here.',
     run: runLab5, render: renderLab5,
   },
   {
     id: 'lab6', tab: 'Lab 6', name: 'SIMD benchmark', src: `${SRC}/6-lab/Parallel_OpenMP.cpp`,
     intro: 'The lab 5 kernels in a benchmark loop: <code>main()</code> calls <code>calcSumsSeq</code> and then <code>calcSumsPar</code> RANGE × 10 times each and reports both totals. <code>6-lab/commands.txt</code> compares <code>icc</code> flags (-O0, -O1, -ipo, profile-guided, -parallel). Here the same source is built with emscripten flags instead: -O0 to -O3, -flto (the counterpart of -ipo), and -msimd128 with and without -ffast-math.',
-    fields: [{ key: 'reps', label: 'Calls per kernel', value: 1000, min: 1, max: 100000 }],
+    fields: [{ key: 'reps', label: 'Calls per kernel', value: 1000, min: 1, max: 100000 }, modeField],
+    gpu: 'GPU port of <code>calcSumsPar</code> (the lab 5 reduction kernel), called the same number of times in one submission, with one read-back at the end.',
     hint: 'The lab makes 100 000 calls per kernel, about 1 billion loop iterations. The default here is 1 000 per build, to keep all seven builds within a couple of seconds.',
     run: runLab6, render: renderLab6,
   },
@@ -414,16 +428,35 @@ async function runLab3(p) {
     rows.push({ n, ms, worst: Math.max(...r.map((d) => d.res.sec * 1e3)), ok: sameArrays(C, ref) });
     await pause();
   }
-  return { rows, seqMs: seq.ms, seqLab: seq.r[0].res.sec * 1e3, size, sample: Array.from(ref.subarray(0, Math.min(6, size))) };
+  const gpu = p.mode !== 'gpu' ? null : await tryGpu(async () => {
+    const { A, B } = (await call(0, 'lab3', 'lab3inputs', { size })).res;
+    await G.warmGpu('matmul');
+    const g = await G.matmul(A, B, size);
+    let maxAbs = 0;
+    for (let i = 0; i < ref.length; i++) maxAbs = Math.max(maxAbs, Math.abs(g.C[i] - ref[i]));
+    return { label: gpuLabel(), info: G.gpu.info, ms: g.ms, ok: maxAbs === 0, maxAbs };
+  });
+  return { rows, seqMs: seq.ms, seqLab: seq.r[0].res.sec * 1e3, size, sample: Array.from(ref.subarray(0, Math.min(6, size))), gpu };
 }
 function renderLab3(d) {
+  const g = gpuOf(d.gpu);
   const best = d.rows.reduce((a, b) => (a.ms <= b.ms ? a : b));
   const allOk = d.rows.every((r) => r.ok);
-  return `<div class="stats">${stat(`${d.size} × ${d.size}`, 'matrices')}${stat(msFmt(d.seqMs), 'sequential (wall clock)')}${stat(msFmt(d.seqLab), 'multiply() own timer')}${stat(`${fmt(d.seqMs / best.ms, 2)}× @ ${best.n}`, 'best speedup')}${stat(allOk ? 'C identical' : 'C differs', 'every run vs sequential', allOk ? 'good' : 'bad')}</div>
-    ${speedupCharts(d.rows, d.seqMs)}
-    ${timingTable(d.rows, d.seqMs, [{ head: 'C vs sequential', cell: (r) => check(r.ok) }])}
+  return `<div class="stats">${stat(`${d.size} × ${d.size}`, 'matrices')}${stat(msFmt(d.seqMs), 'sequential (wall clock)')}${stat(msFmt(d.seqLab), 'multiply() own timer')}${stat(`${fmt(d.seqMs / best.ms, 2)}× @ ${best.n}`, 'best speedup')}${stat(allOk ? 'C identical' : 'C differs', 'every run vs sequential', allOk ? 'good' : 'bad')}${gpuStats(g, d.seqMs, g?.ok ? 'C identical' : `max |ΔC| ${g?.maxAbs}`)}</div>
+    ${gpuLine(d.gpu)}
+    ${speedupCharts(d.rows, d.seqMs, 'workers', g)}
+    ${timingTable(d.rows, d.seqMs, [{ head: 'C vs sequential', cell: (r) => check(r.ok) }], g)}
     <p class="hint">C[0][0…${d.sample.length - 1}] = ${d.sample.join(', ')}. The wall-clock times include sending each worker's C back to the page and adding them up.</p>`;
 }
+
+// GPU stats: its time, speedup over the sequential CPU run, and the check against the CPU result
+const gpuStats = (g, seqMs, verdict, what = 'wall clock') => (g ? `${stat(msFmt(g.ms), `${g.label}, ${what}`)}${stat(`${fmt(seqMs / g.ms, 2)}×`, 'GPU vs sequential', seqMs / g.ms > 1 ? 'good' : '')}${stat(verdict, 'GPU vs CPU result', g.ok ? 'good' : 'bad')}` : '');
+// a failed GPU run leaves the CPU results and says why
+async function tryGpu(f) {
+  try { return await f(); } catch (e) { return { failed: String(e.message || e) }; }
+}
+const gpuOf = (g) => (g && !g.failed ? g : null);
+const gpuLine = (g) => (g?.failed ? `<p class="note">The GPU run failed (${esc(g.failed)}), so only the CPU results are shown.</p>` : g ? `<p class="hint gpu-ran" style="margin-bottom:14px">Ran on <b>${esc(g.label)}</b> (${esc(g.info)}). The GPU time covers the upload, the kernels and the read-back; compiling the shaders happens in a warm-up before it.</p>` : '');
 
 // ------------------------------------------------------------------- lab 4 --
 const levelsFor = (n, branch, depth) => { let L = 0; while (branch ** L < n && L < depth) L++; return L; };
@@ -528,26 +561,37 @@ async function runLab5(p) {
   const builds = {};
   for (const mod of ['lab5-scalar', 'lab5-simd128']) await warmUp(1, [[mod, 'simd', () => ({ reps: 50 })]]);
   for (const mod of ['lab5-scalar', 'lab5-simd128']) builds[mod] = (await call(0, mod, 'simd', { reps: p.reps })).res;
-  return { out, builds };
+  const gpu = p.mode === 'gpu' ? await gpuSums(p.reps, builds['lab5-scalar'].seqSums) : null;
+  return { out, builds, gpu };
 }
-function renderLab5(d) {
+// The GPU reduction, checked against calcSumsSeq's float sums: max relative error over the six
+const gpuSums = (reps, ref) => tryGpu(async () => {
+  await G.warmGpu('sums');
+  const g = await G.sums(reps);
+  const maxRel = Math.max(...g.sums.map((v, i) => Math.abs(v - ref[i]) / Math.abs(ref[i])));
+  return { label: gpuLabel(), info: G.gpu.info, ms: g.perCall, oneMs: g.oneMs, sums: g.sums, maxRel, ok: maxRel < 1e-5 };
+});
+const relVerdict = (g) => `rel. error ${g.maxRel === 0 ? '0' : g.maxRel.toExponential(1)}`;
+function renderLab5(d, p) {
   const a = d.builds['lab5-scalar'], b = d.builds['lab5-simd128'];
   const ex = exactSums();
-  const cols = [['calcSumsSeq', a.seqSums], ['calcSumsPar (omp simd)', a.parSums], ['calcSumsPar + simd128', b.parSums]];
+  const g = gpuOf(d.gpu);
+  const cols = [['calcSumsSeq', a.seqSums], ['calcSumsPar (omp simd)', a.parSums], ['calcSumsPar + simd128', b.parSums], ...(g ? [[g.label, g.sums]] : [])];
   const withTotals = (s) => [...s, s[2] + s[3], s[4] + s[5]];
   const names = [...SUM_NAMES, 'sum3_1 + sum3_2', 'sum4_1 + sum4_2'];
   const exT = withTotals(ex);
   const rows = names.map((nm, i) => `<tr><td><code>${nm}</code></td>${cols.map(([, s]) => `<td class="num">${withTotals(s)[i].toPrecision(7)}</td>`).join('')}<td class="num muted">${exT[i].toPrecision(10)}</td></tr>`).join('');
-  const cats = ['scalar build', '-msimd128 build'];
+  const cats = ['scalar build', '-msimd128 build', ...(g ? [g.label] : [])];
   const vec = b.par < a.par * 0.7;
-  return `<div class="stats">${stat(msFmt(a.seq), 'calcSumsSeq')}${stat(msFmt(a.par), 'calcSumsPar (omp simd)')}${stat(msFmt(b.par), 'calcSumsPar, -msimd128')}${stat(`${fmt(a.seq / b.par, 2)}×`, 'SIMD128 vs sequential', a.seq / b.par > 1 ? 'good' : '')}${stat(vec ? 'yes' : 'no', 'omp simd loop sped up by simd128', vec ? 'good' : '')}</div>
+  return `<div class="stats">${stat(msFmt(a.seq), 'calcSumsSeq')}${stat(msFmt(a.par), 'calcSumsPar (omp simd)')}${stat(msFmt(b.par), 'calcSumsPar, -msimd128')}${stat(`${fmt(a.seq / b.par, 2)}×`, 'SIMD128 vs sequential', a.seq / b.par > 1 ? 'good' : '')}${stat(vec ? 'yes' : 'no', 'omp simd loop sped up by simd128', vec ? 'good' : '')}${gpuStats(g, a.seq, g && relVerdict(g), 'per call')}</div>
+    ${gpuLine(d.gpu)}
     <div class="charts two">
-      ${chart({ kind: 'bar', title: 'Time per call', x: 'build', y: 'time, ms', cats, series: [{ name: 'calcSumsSeq', ys: [a.seq, b.seq], color: '--c2' }, { name: 'calcSumsPar (omp simd)', ys: [a.par, b.par], color: '--c1' }] })}
+      ${chart({ kind: 'bar', title: g ? 'Time per call (log scale)' : 'Time per call', x: 'build', y: 'time, ms', logY: !!g, cats, series: [{ name: 'calcSumsSeq', ys: [a.seq, b.seq, ...(g ? [NaN] : [])], color: '--c2' }, { name: g ? 'calcSumsPar (omp simd / GPU)' : 'calcSumsPar (omp simd)', ys: [a.par, b.par, ...(g ? [g.ms] : [])], color: '--c1' }] })}
       ${consoleBlock('Program output', d.out, 'the lab\'s main(), -fopenmp-simd build')}
     </div>
     <div data-copyable style="margin-top:16px"><div class="copy-head"><h2>Sums <small>· float, as printed with 7 digits; last column in double</small></h2>${actions('table')}</div>
     <div class="table-wrap"><table><thead><tr><th>Sum</th>${cols.map(([n]) => `<th class="num">${n}</th>`).join('')}<th class="num">double</th></tr></thead><tbody>${rows}</tbody></table></div></div>
-    <p class="hint">The vectorized loop adds in a different order, so its last digits can differ from the sequential loop.</p>`;
+    <p class="hint">The vectorized loop adds in a different order, so its last digits can differ from the sequential loop${g ? `, and so does the GPU's tree reduction. One GPU call with its own read-back takes ${msFmt(g.oneMs)}; most of that is the round trip, which the average over ${p.reps.toLocaleString('en')} calls spreads out` : ''}.</p>`;
 }
 
 const LAB6_BUILDS = [
@@ -559,15 +603,22 @@ async function runLab6(p) {
   for (const [mod] of LAB6_BUILDS) await call(0, mod, 'simdBench', { reps: 20 });
   await sleep(150);
   for (const [mod, flags] of LAB6_BUILDS) { rows.push({ mod, flags, ...(await call(0, mod, 'simdBench', { reps: p.reps })).res }); await pause(); }
+  if (p.mode !== 'gpu') return rows;
+  const ref = (await call(0, 'lab5-scalar', 'simd', { reps: 1 })).res.seqSums;
+  const g = await gpuSums(p.reps, ref);
+  rows.gpu = g.failed ? g : { ...g, ms: g.ms * p.reps };
   return rows;
 }
 function renderLab6(rows, p) {
-  const cats = rows.map((r) => r.flags);
-  const tr = rows.map((r) => `<tr><td><code>em++ ${r.flags} -fopenmp-simd</code></td><td class="num">${msFmt(r.seq)}</td><td class="num">${msFmt(r.par)}</td><td class="num">${fmt(r.seq / r.par, 2)}×</td></tr>`).join('');
+  const g = gpuOf(rows.gpu);
+  const cats = [...rows.map((r) => r.flags), ...(g ? [g.label] : [])];
+  const tr = rows.map((r) => `<tr><td><code>em++ ${r.flags} -fopenmp-simd</code></td><td class="num">${msFmt(r.seq)}</td><td class="num">${msFmt(r.par)}</td><td class="num">${fmt(r.seq / r.par, 2)}×</td></tr>`).join('')
+    + (g ? `<tr class="gpu-row"><td>${esc(g.label)} <small class="muted">(port of calcSumsPar, ${check(g.ok, relVerdict(g), relVerdict(g))})</small></td><td class="num muted">–</td><td class="num">${msFmt(g.ms)}</td><td class="num muted">–</td></tr>` : '');
   const o0 = rows[0], o3 = rows[3], simd = rows[5];
-  return `<div class="stats">${stat(msFmt(o0.seq), 'Sequential, -O0')}${stat(msFmt(o3.seq), 'Sequential, -O3')}${stat(msFmt(o3.par), 'Parallel, -O3')}${stat(msFmt(simd.par), 'Parallel, -O3 -msimd128')}${stat(`${fmt(o0.seq / simd.par, 1)}×`, '-O0 sequential vs -O3 -msimd128 parallel', 'good')}</div>
+  return `<div class="stats">${stat(msFmt(o0.seq), 'Sequential, -O0')}${stat(msFmt(o3.seq), 'Sequential, -O3')}${stat(msFmt(o3.par), 'Parallel, -O3')}${stat(msFmt(simd.par), 'Parallel, -O3 -msimd128')}${stat(`${fmt(o0.seq / simd.par, 1)}×`, '-O0 sequential vs -O3 -msimd128 parallel', 'good')}${g ? `${stat(msFmt(g.ms), `${g.label}, ${p.reps.toLocaleString('en')} calls`)}${stat(`${fmt(o3.par / g.ms, 2)}×`, 'GPU vs -O3 parallel', o3.par / g.ms > 1 ? 'good' : '')}${stat(relVerdict(g), 'GPU vs CPU sums', g.ok ? 'good' : 'bad')}` : ''}</div>
+    ${gpuLine(rows.gpu)}
     <div class="charts">
-      ${chart({ kind: 'bar', rotate: true, height: 300, title: `${p.reps.toLocaleString('en')} calls per kernel`, x: 'build', y: 'time, ms', logY: true, cats, series: [{ name: 'Sequential', ys: rows.map((r) => r.seq), color: '--c2' }, { name: 'Parallel', ys: rows.map((r) => r.par), color: '--c1' }] })}
+      ${chart({ kind: 'bar', rotate: true, height: 300, title: `${p.reps.toLocaleString('en')} calls per kernel`, x: 'build', y: 'time, ms', logY: true, cats, series: [{ name: 'Sequential', ys: [...rows.map((r) => r.seq), ...(g ? [NaN] : [])], color: '--c2' }, { name: 'Parallel', ys: [...rows.map((r) => r.par), ...(g ? [g.ms] : [])], color: '--c1' }] })}
     </div>
     <div data-copyable style="margin-top:16px"><div class="copy-head"><h2>Builds <small>· the lab prints "Sequential" and "Parallel"</small></h2>${actions('table')}</div>
     <div class="table-wrap"><table><thead><tr><th>Build</th><th class="num">Sequential</th><th class="num">Parallel</th><th class="num">Sequential / Parallel</th></tr></thead><tbody>${tr}</tbody></table></div></div>
@@ -730,7 +781,7 @@ function svgPng(svg, title, legend = [], scale = 2) {
   });
 }
 
-const csvCell = (v) => (/[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
+const csvCell = (v) => (typeof v === 'number' && !Number.isFinite(v) ? '' : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
 function chartCsv(spec) {
   if (spec.kind === 'bar') return [[spec.x, ...spec.series.map((s) => s.name || spec.y)], ...spec.cats.map((c, i) => [c, ...spec.series.map((s) => s.ys[i])])].map((r) => r.map(csvCell).join(',')).join('\n');
   const s0 = spec.series[0];
@@ -805,6 +856,8 @@ let busy = false; // the workers are shared, so one lab runs at a time
 
 function fieldHtml(lab, f) {
   const id = `${lab.id}-${f.key}`;
+  if (f.type === 'compute') return computeSwitch(id, f);
+  if (f.type === 'select') return `<label class="field select" for="${id}"${f.key === 'mode' ? ' style="display:none"' : ''}>${esc(f.label)}<select id="${id}" name="${f.key}">${f.options.map(([v, t]) => (v === 'gpu' ? '<option value="gpu" disabled>CPU + GPU (checking…)</option>' : `<option value="${v}">${esc(t)}</option>`)).join('')}</select></label>`;
   const type = f.type || 'number';
   const attrs = type === 'number' ? ` min="${f.min}" max="${f.max}" step="${f.step || 1}" required` : ' spellcheck="false" autocomplete="off"';
   return `<label class="field${f.wide ? ' wide' : ''}${f.xwide ? ' xwide' : ''}" for="${id}">${esc(f.label)}<input id="${id}" name="${f.key}" type="${type}" value="${esc(f.value)}"${attrs}></label>`;
@@ -815,7 +868,7 @@ function build() {
     const b = document.createElement('button');
     b.type = 'button'; b.role = 'tab'; b.dataset.lab = lab.id;
     b.setAttribute('aria-controls', `panel-${lab.id}`);
-    b.innerHTML = `<span class="lang cpp">C++</span>${lab.tab}<span class="long muted" style="font-weight:400">· ${esc(lab.name)}</span>`;
+    b.innerHTML = `<span class="lang cpp">C++</span>${lab.gpu ? '<span class="gpu-badge" title="Has a WebGPU / WebGL2 mode">GPU</span>' : ''}${lab.tab}<span class="long muted" style="font-weight:400">· ${esc(lab.name)}</span>`;
     b.onclick = () => select(lab.id, true);
     nav.appendChild(b);
 
@@ -827,12 +880,14 @@ function build() {
       <form class="params" novalidate>${lab.fields.map((f) => fieldHtml(lab, f)).join('')}<button class="run" type="submit">Run</button></form>
       ${lab.examples ? `<div class="examples"><span>Try</span>${lab.examples.map(([v, t]) => `<button type="button" class="chip" data-v="${esc(v)}">${esc(t)}</button>`).join('')}</div>` : ''}
       ${lab.hint ? `<p class="hint">${lab.hint}</p>` : ''}
+      ${lab.gpu ? `<p class="hint gpu-note" style="display:none">${lab.gpu} ${GPU_NOTE}</p>` : ''}
       <div class="out" style="margin-top:18px"></div>`;
     main.appendChild(sec);
     state.set(lab.id, { ran: false, running: false });
 
     const form = $('form', sec);
     form.addEventListener('submit', (e) => { e.preventDefault(); run(lab); });
+    form.querySelectorAll('.compute-switch input').forEach((r) => r.onchange = () => { syncSwitch(r.closest('.compute-switch')); remember(lab.id, r.value); });
     sec.querySelectorAll('.chip').forEach((c) => c.onclick = () => { form.elements[lab.fields[0].key].value = c.dataset.v; run(lab); });
   }
 }
@@ -842,7 +897,7 @@ function params(lab) {
   const fd = new FormData(form), p = {};
   for (const f of lab.fields) {
     const v = fd.get(f.key);
-    p[f.key] = f.list || f.layers ? parseList(v) : f.type === 'text' ? v : Number(v);
+    p[f.key] = f.list || f.layers ? parseList(v) : f.type === 'text' || f.type === 'select' || f.type === 'compute' ? v || 'cpu' : Number(v);
   }
   return p;
 }
@@ -859,9 +914,10 @@ function invalid(lab, p) {
       if (v.reduce((s, n) => s + n, 0) > 20000000) return 'Layer sizes: keep the total under 20 million neurons.';
       continue;
     }
-    if (f.type === 'text') continue;
+    if (f.type === 'text' || f.type === 'select' || f.type === 'compute') continue;
     if (!Number.isFinite(v) || v < f.min || v > f.max || !Number.isInteger(v)) return `${f.label} must be a whole number from ${f.min} to ${f.max}.`;
   }
+  if (p.mode === 'gpu' && !G.gpu.backend) return `GPU mode isn't available: ${G.gpu.reason || 'still checking for a GPU'}.`;
   if (lab.id === 'lab4' && p.draw > p.kochMax) return 'The Koch depth to draw can\'t be more than the sweep\'s max depth.';
   return null;
 }
@@ -870,6 +926,12 @@ async function run(lab) {
   const st = state.get(lab.id);
   if (st.running || busy) return;
   const sec = $(`#panel-${lab.id}`), btn = $('.run', sec), out = $('.out', sec);
+  // a lab with a GPU mode runs first in its default mode, so it waits for the (quick) GPU check
+  if (lab.gpu && !gpuChecked) {
+    if (!out.children.length) out.innerHTML = loadingNote();
+    if (!st.waitGpu) st.waitGpu = gpuSettled.then(() => { st.waitGpu = null; if (!st.ran && !sec.hidden) run(lab); });
+    return;
+  }
   const p = params(lab);
   const bad = invalid(lab, p);
   if (bad) { out.innerHTML = `<div class="err">${esc(bad)}</div>`; return; }
@@ -911,6 +973,43 @@ function select(id, push) {
     if (busy) $(`#panel-${lab.id} .out`).innerHTML = loadingNote();
     run(lab);
   } else { drawCharts($(`#panel-${lab.id}`)); redrawCustom(); }
+}
+
+// The compute switch: GPU (which runs the CPU lab too, for the comparison) first, then CPU.
+// Until the GPU check is done it shows CPU, dimmed and inert; without a GPU backend it's hidden.
+const CPU_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="8" height="8" rx="1.2"/><rect x="6.5" y="6.5" width="3" height="3" fill="currentColor" stroke="none"/><path d="M6 1.5V4M10 1.5V4M6 12v2.5M10 12v2.5M1.5 6H4M1.5 10H4M12 6h2.5M12 10h2.5"/></svg>';
+const GPU_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="4" width="13" height="7.5" rx="1.2"/><circle cx="10.5" cy="7.75" r="2"/><path d="M4 6.5h2.5M4 9h2.5M3 11.5V14M6 11.5V14"/></svg>';
+const GPU_TIP = 'Runs the lab on the CPU as usual and the GPU port next to it, to compare the two';
+const computeSwitch = (id, f) => `<div class="field compute" data-mode-field><span id="${id}-label">${esc(f.label)}</span><div class="compute-switch cs-pending" role="radiogroup" aria-labelledby="${id}-label" style="--n:2;--i:1">`
+  + `<label title="${GPU_TIP}"><input type="radio" name="${f.key}" value="gpu" disabled>${GPU_ICON}GPU<span class="cs-chip"></span></label>`
+  + `<label title="The lab's C++ on the CPU only"><input type="radio" name="${f.key}" value="cpu" checked>${CPU_ICON}CPU</label></div></div>`;
+const syncSwitch = (sw) => { const rs = [...sw.querySelectorAll('input')]; sw.style.setProperty('--i', Math.max(0, rs.findIndex((r) => r.checked))); };
+// the choice is remembered per lab for the session
+const MODE_KEY = (id) => `omp-mode:${id}`;
+const remember = (id, v) => { try { sessionStorage.setItem(MODE_KEY(id), v); } catch {} };
+const recall = (id) => { try { return sessionStorage.getItem(MODE_KEY(id)); } catch { return null; } };
+
+let gpuChecked = false;
+const gpuSettled = G.gpuReady.catch((e) => console.error(e)).then(showGpuMode);
+// Once the GPU check is done: GPU by default with WebGPU, CPU with only WebGL2, no switch without either.
+function showGpuMode() {
+  const on = !!G.gpu.backend;
+  for (const lab of LABS.filter((l) => l.gpu)) {
+    const sec = $(`#panel-${lab.id}`), field = $('[data-mode-field]', sec), sw = $('.compute-switch', field);
+    const gpuIn = $('input[value="gpu"]', sw), cpuIn = $('input[value="cpu"]', sw);
+    if (on) {
+      gpuIn.disabled = false;
+      $('.cs-chip', sw).textContent = G.backendName();
+      gpuIn.closest('label').title = `${GPU_TIP} (${gpuLabel()}: ${G.gpu.info})`;
+      const want = recall(lab.id) || (G.gpu.backend === 'webgpu' ? 'gpu' : 'cpu');
+      (want === 'gpu' ? gpuIn : cpuIn).checked = true;
+      syncSwitch(sw);
+      sw.classList.remove('cs-pending');
+    } else { cpuIn.checked = true; field.hidden = true; }
+    const note = $('.gpu-note', sec);
+    if (note) note.style.display = on ? '' : 'none';
+  }
+  gpuChecked = true;
 }
 
 build();
